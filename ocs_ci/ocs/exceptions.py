@@ -180,3 +180,11 @@ class RDMDiskNotFound(Exception):
 
 class CredReqSecretNotFound(Exception):
     pass
+
+
+class ClusterUtilizationNotBalanced(Exception):
+    pass
+
+
+class OsdIsIncreasing(Exception):
+    pass
