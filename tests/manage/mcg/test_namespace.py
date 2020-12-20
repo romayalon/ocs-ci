@@ -32,12 +32,12 @@ class TestNamespace(MCGTest):
 
     @pytest.mark.polarion_id("OCS-2255")
     @tier1
-    def test_namespace_resource_creation(self, ns_resource_factory):
+    def test_namespace_store_creation(self, ns_store_factory):
         """
-        Test namespace resource creation using the MCG RPC.
+        Test namespace store creation using the MCG CRDs.
         """
-        # Create the namespace resource and verify health
-        ns_resource_factory()
+        # Create the namespace store and verify health
+        ns_store_factory()
 
     @tier1
     @pytest.mark.parametrize(
@@ -52,61 +52,94 @@ class TestNamespace(MCGTest):
         ],
     )
     def test_namespace_bucket_creation(
-        self, ns_resource_factory, bucket_factory, platform
+        self, ns_store_factory, bucket_factory, bucket_class_factory, platform
     ):
         """
-        Test namespace bucket creation using the MCG RPC.
+        Test namespace bucket creation using the MCG CRDs.
         """
         # Create the namespace resource and verify health
-        ns_resource_name = ns_resource_factory(platform=platform)[1]
+        ns_store_name = ns_store_factory(platform=platform)[1]
 
         # Create the namespace bucket on top of the namespace resource
+        bucketclass_dict = {
+            "interface": "OC",
+            "namespace_policy_dict": {
+                "type": constants.NAMESPACE_POLICY_TYPE_SINGLE,
+                "resource": ns_store_name
+                # "read_resources": [ns_store_name], #ADD test for multi too
+                # "write_resource": ns_store_name
+            },
+        }
+        bucketclass = bucket_class_factory(bucketclass_dict)
         bucket_factory(
             amount=1,
-            interface="mcg-namespace",
-            write_ns_resource=ns_resource_name,
-            read_ns_resources=[ns_resource_name],
+            interface="OC",
+            bucketclass=bucketclass.name,
         )
 
     @pytest.mark.polarion_id("OCS-2407")
     @tier1
     def test_namespace_bucket_creation_with_rgw(
-        self, ns_resource_factory, bucket_factory, rgw_deployments
+        self, ns_store_factory, bucket_factory, bucket_class_factory, rgw_deployments
     ):
         """
-        Test namespace bucket creation using the MCG RPC.
+        Test namespace bucket creation using the MCG CRDs.
 
         """
         # Create the namespace resource and verify health
-        ns_resource_name = ns_resource_factory(platform=constants.RGW_PLATFORM)[1]
+        ns_store_name = ns_store_factory(platform=constants.RGW_PLATFORM)[1]
 
         # Create the namespace bucket on top of the namespace resource
+        bucketclass_dict = {
+            "interface": "OC",
+            "namespace_policy_dict": {
+                "type": constants.NAMESPACE_POLICY_TYPE_SINGLE,
+                "resource": ns_store_name
+                # "read_resources": [ns_store_name],#ADD test for multi too
+                # "write_resource": ns_store_name
+            },
+        }
+        bucketclass = bucket_class_factory(bucketclass_dict)
         bucket_factory(
             amount=1,
-            interface="mcg-namespace",
-            write_ns_resource=ns_resource_name,
-            read_ns_resources=[ns_resource_name],
+            interface="OC",
+            bucketclass=bucketclass.name,
         )
 
     @pytest.mark.polarion_id("OCS-2257")
     @tier1
     def test_write_to_aws_read_from_ns(
-        self, mcg_obj, cld_mgr, awscli_pod, ns_resource_factory, bucket_factory
+        self,
+        mcg_obj,
+        cld_mgr,
+        awscli_pod,
+        ns_store_factory,
+        bucket_factory,
+        bucket_class_factory,
     ):
         """
         Test Write to AWS and read from ns bucket using MCG RPC.
         """
-        # Create the namespace resource and verify health
-        result = ns_resource_factory()
+        # Create the namespace store and verify health
+        result = ns_store_factory()
         target_bucket_name = result[0]
-        ns_resource_name = result[1]
+        ns_store_name = result[1]
 
         # Create the namespace bucket on top of the namespace resource
+        bucketclass_dict = {
+            "interface": "OC",
+            "namespace_policy_dict": {
+                "type": constants.NAMESPACE_POLICY_TYPE_SINGLE,
+                "resource": ns_store_name
+                # "read_resources": [ns_store_name], #ADD test for multi too
+                # "write_resource": ns_store_name
+            },
+        }
+        bucketclass = bucket_class_factory(bucketclass_dict)
         rand_ns_bucket = bucket_factory(
             amount=1,
-            interface="mcg-namespace",
-            write_ns_resource=ns_resource_name,
-            read_ns_resources=[ns_resource_name],
+            interface="OC",
+            bucketclass=bucketclass.name,
         )[0].name
 
         s3_creds = {
@@ -132,23 +165,38 @@ class TestNamespace(MCGTest):
     @pytest.mark.polarion_id("OCS-2258")
     @tier1
     def test_write_to_ns_read_from_aws(
-        self, mcg_obj, cld_mgr, awscli_pod, ns_resource_factory, bucket_factory
+        self,
+        mcg_obj,
+        cld_mgr,
+        awscli_pod,
+        ns_store_factory,
+        bucket_factory,
+        bucket_class_factory,
     ):
         """
         Test Write to ns bucket using MCG RPC and read directly from AWS.
         """
 
         # Create the namespace resource and verify health
-        result = ns_resource_factory()
+        result = ns_store_factory()
         target_bucket_name = result[0]
-        ns_resource_name = result[1]
+        ns_store_name = result[1]
 
         # Create the namespace bucket on top of the namespace resource
+        bucketclass_dict = {
+            "interface": "OC",
+            "namespace_policy_dict": {
+                "type": constants.NAMESPACE_POLICY_TYPE_SINGLE,
+                "resource": ns_store_name
+                # "read_resources": [ns_store_name], #ADD test for multi too
+                # "write_resource": ns_store_name
+            },
+        }
+        bucketclass = bucket_class_factory(bucketclass_dict)
         rand_ns_bucket = bucket_factory(
             amount=1,
-            interface="mcg-namespace",
-            write_ns_resource=ns_resource_name,
-            read_ns_resources=[ns_resource_name],
+            interface="OC",
+            bucketclass=bucketclass.name,
         )[0].name
 
         s3_creds = {

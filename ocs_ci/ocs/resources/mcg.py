@@ -593,7 +593,50 @@ class MCG:
             },
         )
         logger.info(f"result from RPC call: {result}")
+        return target_bucket_name
 
+    def create_namespace_store(
+        self, ns_store_name, region, cld_mgr, cloud_uls_factory, platform
+    ):
+        """
+        Creates a new namespace store
+
+        Args:
+            ns_store_name (str): The name to be given to the new namespace resource
+            region (str): The region name to be used
+            cld_mgr: A cloud manager instance
+            cloud_uls_factory: The cloud uls factory
+            platform (str): The platform resource name
+
+        Returns:
+            str: The name of the created target_bucket_name (cloud uls)
+        """
+        # Create the actual target bucket on AWS
+        uls_dict = cloud_uls_factory({platform: [(1, region)]})
+        target_bucket_name = list(uls_dict[platform])[0]
+
+        ns_data = templating.load_yaml(constants.MCG_NAMESPACESTORE_YAML)
+        ns_data["metadata"]["name"] = ns_store_name
+        ns_data["metadata"]["namespace"] = config.ENV_DATA["cluster_namespace"]
+        if platform == constants.AWS_PLATFORM:
+            ns_data["spec"] = {
+                "type": "aws-s3",
+                "awsS3": {
+                    "targetBucket": target_bucket_name,
+                    "region": region,
+                    "secret": {"name": cld_mgr.aws_client.secret.name},
+                },
+            }
+        if platform == constants.AZURE_PLATFORM:
+            ns_data["spec"] = {
+                "type": "azure-blob",
+                "azureBlob": {
+                    "targetBlobContainer": target_bucket_name,
+                    # "region": region,
+                    "secret": {"name": cld_mgr.azure_client.secret.name},
+                },
+            }
+        create_resource(**ns_data)
         return target_bucket_name
 
     def check_ns_resource_validity(
@@ -653,13 +696,14 @@ class MCG:
             "pool_api", "delete_namespace_resource", {"name": ns_resource_name}
         )
 
-    def oc_create_bucketclass(self, name, backingstores, placement):
+    def oc_create_bucketclass(self, name, backingstores, placement, namespace_policy):
         """
         Creates a new NooBaa bucket class using a template YAML
         Args:
             name (str): The name to be given to the bucket class
             backingstores (list): The backing stores to use as part of the policy
             placement (str): The placement policy to be used - Mirror | Spread
+            namespace_policy (dict): The namespace policy to be used
 
         Returns:
             OCS: The bucket class resource
@@ -668,9 +712,32 @@ class MCG:
         bc_data = templating.load_yaml(constants.MCG_BUCKETCLASS_YAML)
         bc_data["metadata"]["name"] = name
         bc_data["metadata"]["namespace"] = self.namespace
-        tiers = bc_data["spec"]["placementPolicy"]["tiers"][0]
-        tiers["backingStores"] = backingstores
-        tiers["placement"] = placement
+        if backingstores and placement:
+            tiers = bc_data["spec"]["placementPolicy"]["tiers"][0]
+            tiers["backingStores"] = backingstores
+            tiers["placement"] = placement
+
+        if namespace_policy:
+            ns_policy = bc_data["spec"]["namespacePolicy"]
+            ns_policy_type = namespace_policy.get("type")
+            ns_policy["type"] = ns_policy_type
+
+            if ns_policy_type == constants.NAMESPACE_POLICY_TYPE_SINGLE:
+                ns_policy_single = ns_policy["single"]
+                ns_policy_single["resource"] = namespace_policy.get("resource")
+            elif ns_policy_type == constants.NAMESPACE_POLICY_TYPE_MULTI:
+                ns_policy_multi = ns_policy["multi"]
+                ns_policy_multi["writeResource"] = namespace_policy.get(
+                    "write_resource"
+                )
+                ns_policy_multi["readResources"] = namespace_policy.get(
+                    "read_resources"
+                )
+            elif ns_policy_type == constants.NAMESPACE_POLICY_TYPE_CACHE:
+                ns_policy_cache = ns_policy["cache"]
+                ns_policy_cache["hubResource"] = namespace_policy.get("hub_resource")
+                ns_policy_cache["ttl"] = namespace_policy.get("ttl")
+
         return create_resource(**bc_data)
 
     def cli_create_bucketclass(self, name, backingstores, placement):

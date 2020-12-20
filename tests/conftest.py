@@ -2911,6 +2911,66 @@ def ns_resource_factory(
 
 
 @pytest.fixture()
+def ns_store_factory(request, mcg_obj, cld_mgr, cloud_uls_factory):
+    """
+    Create a namespace store factory. Calling this fixture creates a new namespace store.
+
+    """
+    created_ns_stores = []
+
+    def _create_ns_stores(platform=constants.AWS_PLATFORM):
+
+        # Create the actual namespace resource
+        rand_ns_store = create_unique_resource_name(constants.MCG_NS_STORE, platform)
+        if platform == constants.RGW_PLATFORM:
+            region = None
+        else:
+            # TODO: fix this when https://github.com/red-hat-storage/ocs-ci/issues/3338
+            # is resolved
+            region = "us-east-2"
+        target_bucket_name = mcg_obj.create_namespace_store(
+            rand_ns_store,
+            region,
+            cld_mgr,
+            cloud_uls_factory,
+            platform,
+        )
+
+        log.info(f"Check validity of NS store {rand_ns_store}")
+        if platform == constants.AWS_PLATFORM:
+            endpoint = constants.MCG_NS_AWS_ENDPOINT
+        elif platform == constants.AZURE_PLATFORM:
+            endpoint = constants.MCG_NS_AZURE_ENDPOINT
+        elif platform == constants.RGW_PLATFORM:
+            rgw_conn = RGW()
+            endpoint, _, _ = rgw_conn.get_credentials()
+        else:
+            raise UnsupportedPlatformError(f"Unsupported Platform: {platform}")
+
+        mcg_obj.check_ns_resource_validity(rand_ns_store, target_bucket_name, endpoint)
+
+        created_ns_stores.append(rand_ns_store)
+        return target_bucket_name, rand_ns_store
+
+    def ns_stores_cleanup():
+        for ns_store in created_ns_stores:
+            try:
+                ns_store.delete()
+            except CommandFailed as e:
+                if "not found" in str(e).lower():
+                    log.warning(
+                        f"Namespacestore {ns_store.name} could not be found in cleanup."
+                        "\nSkipping deletion."
+                    )
+                else:
+                    raise
+
+    request.addfinalizer(ns_stores_cleanup)
+
+    return _create_ns_stores
+
+
+@pytest.fixture()
 def snapshot_factory(request):
     """
     Snapshot factory. Calling this fixture creates a volume snapshot from the
